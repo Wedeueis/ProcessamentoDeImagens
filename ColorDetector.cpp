@@ -1,47 +1,30 @@
-#include "opencv2/opencv.hpp"
-#include <string>
+#include "ColorDetector.hpp"
 
-#define BLUR_SIZE 5	
-#define MORPH_CLOSE_SIZE 21
-#define MORPH_OPEN_SIZE 11
-#define OFFSET 10
-
+cv::Point g_mouse(400,200);
 cv::Scalar g_meanColor(128,128,128);
-cv::Point g_mouse(200,400);	
-int g_rangeH = 10, g_rangeS = 10, g_rangeV = 10;
 cv::Mat g_frame;
+int g_rangeH = 10 ,g_rangeS =10, g_rangeV = 10;
 cv::Scalar g_colorsHSV[4];
 int g_selectedColor = 0;
 
-void on_trackbar(int);
-void createTrackBars(const char* windowName);
-void colorDetection(cv::Mat src, cv::Mat &mask);
-void maskBitwiseAND(cv::Mat frame, cv::Mat mask);
-void colorBackFunc(int event, int x, int y, int flags, void* userdata);
-cv::Rect drawRect(cv::Mat &frame);
-void actionConfigureColors(cv::VideoCapture &cap);
+void on_trackbar(int){};
 
-int main() {
-	cv::VideoCapture cap(0);
-	if(!cap.isOpened())
-		return -1;
-	
-	cv::Mat frame, mask;
-	cv::namedWindow("Frame",cv::WINDOW_AUTOSIZE);
-	
-	while(true){
-		cap >> frame;
-		cv::imshow("Frame",frame);
-		colorDetection(frame, mask);
-		maskBitwiseAND(frame, mask);
-		int k = cv::waitKey(30) & 0xFF;
-		if(k == 27 || k == 'q')
-			break;
-		else if(k == 'c')
-			actionConfigureColors(cap);
-		else if( k >= 49 && k <= 53) {
-			g_selectedColor = k - 49;
-		}
+void colorCallBack(int event, int x, int y, int flags, void* userdata) {
+	if (event == cv::EVENT_LBUTTONUP) {
+		//Get click x y position to a global variable
+		g_mouse.x = x;
+		g_mouse.y = y;
+	    	//Get Region of Interest
+		cv::Rect roi = drawRect(g_frame);
+		cv::Mat image_roi = g_frame(roi);
+		cv::cvtColor(image_roi,image_roi, cv::COLOR_BGR2HSV, 0);
+		//create a round mask
+		cv::Mat mask_pickcolor(OFFSET*2,OFFSET*2,CV_8UC1,cv::Scalar(1,1,1));
+		cv::circle(mask_pickcolor, cv::Point(OFFSET, OFFSET), OFFSET,
+			   cv::Scalar(255,255,255), -1, 8 , 0 );
+		//Find Mean of colors (Excluding outer areas)
+		cv::GaussianBlur(image_roi, image_roi, cv::Size(3, 3),0,0);
+		g_meanColor = cv::mean(image_roi,mask_pickcolor);
 	}
 }
 
@@ -51,8 +34,6 @@ void createTrackBars(const char* windowName){
 	cvCreateTrackbar("RANGE_S", windowName, &g_rangeS, 128, on_trackbar);
 	cvCreateTrackbar("RANGE_V", windowName, &g_rangeV, 128, on_trackbar);
 }
-
-void on_trackbar(int){};
 
 //Function to create a color mask and "cut" the ball in the source image
 void colorDetection(cv::Mat src, cv::Mat &mask){
@@ -77,25 +58,6 @@ void maskBitwiseAND(cv::Mat frame, cv::Mat mask){
 	const char* windowName = "Mask";
 	cv::imshow(windowName, tgt);
 	createTrackBars(windowName);
-}
-
-void colorCallBack(int event, int x, int y, int flags, void* userdata) {
-	if (event == cv::EVENT_LBUTTONUP) {
-		//Get click x y position to a global variable
-		g_mouse.x = x;
-		g_mouse.y = y;
-	    	//Get Region of Interest
-		cv::Rect roi = drawRect(g_frame);
-		cv::Mat image_roi = g_frame(roi);
-		cv::cvtColor(image_roi,image_roi, cv::COLOR_BGR2HSV, 0);
-		//create a round mask
-		cv::Mat mask_pickcolor(OFFSET*2,OFFSET*2,CV_8UC1,cv::Scalar(1,1,1));
-		cv::circle(mask_pickcolor, cv::Point(OFFSET, OFFSET), OFFSET,
-			   cv::Scalar(255,255,255), -1, 8 , 0 );
-		//Find Mean of colors (Excluding outer areas)
-		cv::GaussianBlur(image_roi, image_roi, cv::Size(3, 3),0,0);
-		g_meanColor = cv::mean(image_roi,mask_pickcolor);
-	}
 }
 
 cv::Rect drawRect(cv::Mat &frame){
@@ -157,4 +119,3 @@ void actionConfigureColors(cv::VideoCapture &cap) {
 	cv::destroyWindow("pickColors");
 	cv::destroyWindow("mask");
 }
-
